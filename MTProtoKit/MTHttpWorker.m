@@ -69,8 +69,8 @@ MTInternalIdClass(MTHttpWorker)
 {
     int32_t randomId = 0;
     arc4random_buf(&randomId, 4);
-    
-    NSString *urlString = [[NSString alloc] initWithFormat:@"http://%@:%d/api", address.ip, (int)address.port];//[[NSString alloc] initWithFormat:@"http://%@:%d/api%" PRIx32 "", address.ip, (int)address.port, randomId];
+    //[[NSString alloc] initWithFormat:@"http://%@:%d/api", address.ip, (int)address.port];
+    NSString *urlString = [[NSString alloc] initWithFormat:@"http://%@:%d/api", address.ip, (int)address.port];
     
     self = [super init];
     
@@ -99,24 +99,25 @@ MTInternalIdClass(MTHttpWorker)
             
             
             AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
-            
             manager.completionQueue = [MTHttpWorker httpWorkerProcessingQueue].nativeQueue;
             
+            NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL: [NSURL URLWithString:urlString]];
+            [request setHTTPMethod: @"POST"];
+            [request setValue:@"" forHTTPHeaderField:@"Host"];
             
-            _task = [manager POST:urlString parameters:nil constructingBodyWithBlock:^(id<AFMultipartFormData>  _Nonnull formData) {
-                [formData appendPartWithHeaders:nil body:payloadData];
-            } progress:^(NSProgress * _Nonnull uploadProgress) {
+            [request setValue:[NSString stringWithFormat:@"%lu", (unsigned long)payloadData.length] forHTTPHeaderField:@"Content-Length"];
+            [request setHTTPBody:payloadData];
+            
+           _task = [manager uploadTaskWithRequest:request fromData:nil progress:^(NSProgress * _Nonnull uploadProgress) {
                 MTHttpWorker *strongSelf = weakSelf;
-                 [strongSelf requestUploadProgress];
-            } success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+                [strongSelf requestUploadProgress];
+            } completionHandler:^(NSURLResponse * _Nonnull response, id  _Nullable responseObject, NSError * _Nullable error) {
                 MTHttpWorker *strongSelf = weakSelf;
-                [strongSelf requestCompleted:responseObject error:nil];
-            } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
-                MTHttpWorker *strongSelf = weakSelf;
-                [strongSelf requestCompleted:nil error:error];
+                [strongSelf requestCompleted:responseObject error:error];
             }];
+            [_task resume];
             
-//            NSMutableURLRequest *urlRequest = [self requestWithMethod:@"POST" path:urlString parameters:nil];
+
 //            [urlRequest setHTTPBody:payloadData];
 //
 //            _operation = [[AFHTTPRequestOperation alloc] initWithRequest:urlRequest];
@@ -156,6 +157,9 @@ MTInternalIdClass(MTHttpWorker)
     }
     return self;
 }
+
+
+
 
 - (void)dealloc
 {

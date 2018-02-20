@@ -34,7 +34,7 @@
         manager.completionQueue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
 
         
-        NSURLSessionDataTask * task = [manager GET: url.path parameters:nil progress:nil success:^(NSURLSessionTask *task, id responseObject) {
+        NSURLSessionDataTask * task = [manager GET: url.absoluteString parameters:nil progress:nil success:^(NSURLSessionTask *task, id responseObject) {
             [subscriber putNext:responseObject];
             [subscriber putCompletion];
         } failure:^(NSURLSessionTask *operation, NSError *error) {
