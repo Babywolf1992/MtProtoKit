@@ -161,7 +161,7 @@ struct ctr_state {
     {
         _internalId = [[MTInternalId(MTTcpConnection) alloc] init];
         
-        _address = [[MTDatacenterAddress alloc] initWithIp:@"127.0.0.1" port:address.port preferForMedia:address.preferForMedia restrictToTcp:address.restrictToTcp cdn:address.cdn preferForProxy:address.preferForProxy];
+        _address = address;
         
         _interface = interface;
         _usageCalculationInfo = usageCalculationInfo;
