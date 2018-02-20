@@ -30,7 +30,7 @@
 
 @end
 
-@interface MTHttpWorker : AFHTTPClient
+@interface MTHttpWorker : NSObject
 
 @property (nonatomic, strong, readonly) id internalId;
 @property (nonatomic, weak) id<MTHttpWorkerDelegate> delegate;

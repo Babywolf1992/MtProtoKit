@@ -42,11 +42,12 @@ MTInternalIdClass(MTHttpWorker)
 @interface MTHttpWorker ()
 {
     MTTimer *_timeoutTimer;
-    AFHTTPRequestOperation *_operation;
     bool _notifiedDelegateAboutConnection;
     bool _isConnected;
     bool _stopped;
     NSTimeInterval _timeout;
+    NSString * _url;
+    NSURLSessionDataTask *_task;
 }
 
 @end
@@ -69,11 +70,14 @@ MTInternalIdClass(MTHttpWorker)
     int32_t randomId = 0;
     arc4random_buf(&randomId, 4);
     
-    NSString *urlString = [[NSString alloc] initWithFormat:@"http://%@:%d/api%" PRIx32 "", address.ip, (int)address.port, randomId];
+    NSString *urlString = [[NSString alloc] initWithFormat:@"http://%@:%d/api", address.ip, (int)address.port];//[[NSString alloc] initWithFormat:@"http://%@:%d/api%" PRIx32 "", address.ip, (int)address.port, randomId];
     
-    self = [super initWithBaseURL:[[NSURL alloc] initWithString:urlString]];
+    self = [super init];
+    
+   // self = [super initWithBaseURL:[[NSURL alloc] initWithString:urlString]];
     if (self != nil)
     {
+        _url = urlString;
         _internalId = [[MTInternalId(MTHttpWorker) alloc] init];
         _delegate = delegate;
         _performsLongPolling = performsLongPolling;
@@ -90,29 +94,51 @@ MTInternalIdClass(MTHttpWorker)
             } queue:[MTHttpWorker httpWorkerProcessingQueue].nativeQueue];
             [_timeoutTimer start];
             
-            NSMutableURLRequest *urlRequest = [self requestWithMethod:@"POST" path:urlString parameters:nil];
-            [urlRequest setHTTPBody:payloadData];
             
-            _operation = [[AFHTTPRequestOperation alloc] initWithRequest:urlRequest];
             
-            [_operation setSuccessCallbackQueue:[MTHttpWorker httpWorkerProcessingQueue].nativeQueue];
-            [_operation setFailureCallbackQueue:[MTHttpWorker httpWorkerProcessingQueue].nativeQueue];
             
-            [_operation setCompletionBlockWithSuccess:^(NSOperation *operation, __unused id responseObject)
-            {
+            
+            AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+            
+            manager.completionQueue = [MTHttpWorker httpWorkerProcessingQueue].nativeQueue;
+            
+            
+            _task = [manager POST:urlString parameters:nil constructingBodyWithBlock:^(id<AFMultipartFormData>  _Nonnull formData) {
+                [formData appendPartWithHeaders:nil body:payloadData];
+            } progress:^(NSProgress * _Nonnull uploadProgress) {
                 MTHttpWorker *strongSelf = weakSelf;
-                [strongSelf requestCompleted:[(AFHTTPRequestOperation *)operation responseData] error:nil];
-            } failure:^(__unused NSOperation *operation, NSError *error)
-            {
+                 [strongSelf requestUploadProgress];
+            } success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+                MTHttpWorker *strongSelf = weakSelf;
+                [strongSelf requestCompleted:responseObject error:nil];
+            } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
                 MTHttpWorker *strongSelf = weakSelf;
                 [strongSelf requestCompleted:nil error:error];
             }];
             
-            [_operation setUploadProgressBlock:^(__unused NSInteger bytesWritten, __unused NSInteger totalBytesWritten, __unused NSInteger totalBytesExpectedToWrite)
-            {
-                MTHttpWorker *strongSelf = weakSelf;
-                [strongSelf requestUploadProgress];
-            }];
+//            NSMutableURLRequest *urlRequest = [self requestWithMethod:@"POST" path:urlString parameters:nil];
+//            [urlRequest setHTTPBody:payloadData];
+//
+//            _operation = [[AFHTTPRequestOperation alloc] initWithRequest:urlRequest];
+//
+//            [_operation setSuccessCallbackQueue:[MTHttpWorker httpWorkerProcessingQueue].nativeQueue];
+//            [_operation setFailureCallbackQueue:[MTHttpWorker httpWorkerProcessingQueue].nativeQueue];
+//
+//            [_operation setCompletionBlockWithSuccess:^(NSOperation *operation, __unused id responseObject)
+//            {
+//                MTHttpWorker *strongSelf = weakSelf;
+//                [strongSelf requestCompleted:[(AFHTTPRequestOperation *)operation responseData] error:nil];
+//            } failure:^(__unused NSOperation *operation, NSError *error)
+//            {
+//                MTHttpWorker *strongSelf = weakSelf;
+//                [strongSelf requestCompleted:nil error:error];
+//            }];
+            
+//            [_operation setUploadProgressBlock:^(__unused NSInteger bytesWritten, __unused NSInteger totalBytesWritten, __unused NSInteger totalBytesExpectedToWrite)
+//            {
+//                MTHttpWorker *strongSelf = weakSelf;
+//                [strongSelf requestUploadProgress];
+//            }];
             
             /*if (request.progressBlock != nil)
             {
@@ -125,7 +151,7 @@ MTInternalIdClass(MTHttpWorker)
                 }];
             }*/
             
-            [self enqueueHTTPRequestOperation:_operation];
+          //  [self enqueueHTTPRequestOperation:_operation];
         }];
     }
     return self;
@@ -145,12 +171,12 @@ MTInternalIdClass(MTHttpWorker)
 {
     _stopped = true;
     
-    AFHTTPRequestOperation *operation = _operation;
-    _operation = nil;
+    NSURLSessionDataTask *task = _task;
+    _task = nil;
 
     [[MTHttpWorker httpWorkerProcessingQueue] dispatchOnQueue:^
     {
-        [operation cancel];
+        [task cancel];
     }];
     
     [self cancelTimer];
@@ -221,7 +247,7 @@ MTInternalIdClass(MTHttpWorker)
     
     [self cancelTimer];
     _stopped = true;
-    _operation = nil;
+    _task = nil;
 }
 
 - (void)requestTimeout
@@ -237,7 +263,7 @@ MTInternalIdClass(MTHttpWorker)
     
     [self cancelTimer];
     _stopped = true;
-    _operation = nil;
+    _task = nil;
 }
 
 @end
